@@ -110,4 +110,51 @@ summary(pr)
 biplot(pr)
 PCbiplot(pr)
 
-t %>% stringr::str_replace(t, "\\[", "{")
+extract_skills <- function(t){
+  t %>% stringr::str_replace_all("\\[|\\]|'", "") %>% stringr::str_split(',') %>% unlist %>% stringr::str_trim() %>% list()
+}
+words <- df %>% 
+  dplyr::select(X, Job_Type, Skill) %>% 
+  # dplyr::slice(1:1000) %>%
+  dplyr::rowwise() %>% 
+  dplyr::mutate(skills = extract_skills(Skill)) %>% 
+  tidyr::unnest(skills) %>% 
+  dplyr::pull(skills)
+wordcloud::wordcloud(words)
+
+hey <- df %>% 
+  dplyr::select(X, Job_Type, Skill) %>% 
+  # dplyr::slice(1:1000) %>%
+  dplyr::rowwise() %>% 
+  dplyr::mutate(skills = extract_skills(Skill)) %>% 
+  tidyr::unnest(skills) %>% mutate(value=1) %>% tidyr::spread(skills, value, fill=0)
+
+n <- nrow(hey)
+skills_names <- colnames(hey)[4:ncol(hey)]
+hey %>% 
+  dplyr::select(skills_names) %>% 
+  dplyr::summarise_all(sum) %>% 
+  tidyr::gather(key,value) %>% 
+  dplyr::mutate(value = value/n) %>% 
+  ggplot2::ggplot()+
+  ggplot2::geom_col(ggplot2::aes(x=reorder(key, value),y=value), width=1)+ 
+  ggplot2::coord_flip()+
+  ggplot2::theme(axis.text.y = ggplot2::element_text(size=6))
+
+hey %>% 
+  dplyr::select(skills_names) %>% 
+  dplyr::summarise_all(sum) %>% 
+  tidyr::gather(key,value) %>% 
+  dplyr::arrange(-value) %>% 
+  dplyr::mutate(value = value/n,
+                id = dplyr::row_number(),
+                group = floor(id / 50)) %>% 
+  ggplot2::ggplot()+
+  ggplot2::geom_col(ggplot2::aes(x=reorder(key, value),y=value), width=1)+
+  ggplot2::labs(x=NULL,y=NULL)+
+  ggplot2::scale_y_continuous(limits=c(0,1), breaks=c(0,1))+
+  ggplot2::coord_flip()+
+  ggplot2::facet_wrap(group~., ncol = 5, scales="free_y")+
+  ggplot2::theme(axis.text.y = ggplot2::element_text(size=8),
+                 strip.background = ggplot2::element_blank(),
+                 strip.text = ggplot2::element_blank(),)
