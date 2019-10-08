@@ -91,6 +91,8 @@ company_sector <- c("Consulting.and.Business.Services","Internet.and.Software",
 plot_mean_count(df, company_sector)
 
 
+# Clustering Attempt ------------------------------------------------------
+
 df_cluster <- df %>%
   dplyr::select(Job_Type, technologies) %>% 
   dplyr::mutate(Job_Type = as.numeric(as.factor(Job_Type))) %>% as.matrix()
@@ -110,18 +112,41 @@ summary(pr)
 biplot(pr)
 PCbiplot(pr)
 
+
+# Skills ------------------------------------------------------------------
+
 extract_skills <- function(t){
   t %>% stringr::str_replace_all("\\[|\\]|'", "") %>% stringr::str_split(',') %>% unlist %>% stringr::str_trim() %>% list()
 }
-words <- df %>% 
+skills_freq <- df %>% 
   dplyr::select(X, Job_Type, Skill) %>% 
-  # dplyr::slice(1:1000) %>%
+  # dplyr::filter(Skill != "") %>% 
+  dplyr::slice(1:1000) %>% 
   dplyr::rowwise() %>% 
-  dplyr::mutate(skills = extract_skills(Skill)) %>% 
-  tidyr::unnest(skills) %>% 
-  dplyr::pull(skills)
-wordcloud::wordcloud(words)
+  dplyr::mutate(skill = extract_skills(Skill),
+                nskills = length(skill)) %>% 
+  dplyr::ungroup() %>% 
+  tidyr::unnest(skill) %>% 
+  dplyr::group_by(skill) %>% 
+  dplyr::summarise(freq = n(),
+                   mean_per_job = mean(nskills)) %>% 
+  dplyr::ungroup()
+wordcloud::wordcloud(words = skills_freq$skills, freq = skills_freq$freq, max.words = 200,
+                     random.order = F, random.color = F, scale = c(2,0.8), rot.per = 0,
+                     colors = RColorBrewer::brewer.pal(9,"Reds")[3:9], min.freq = 10)
 
+skills_freq %>% 
+  ggplot2::ggplot()+
+  ggrepel::geom_text_repel(ggplot2::aes(x=mean_per_job, y=freq, label=skill,
+                                        size=freq, color=mean_per_job), segment.alpha = 0)+
+  ggplot2::scale_color_gradient(low="green3", high="violetred", trans = "log10",
+                       guide = ggplot2::guide_colourbar(direction = "horizontal", title.position ="top")) +
+  ggplot2::scale_size_continuous(range = c(3, 10), guide = FALSE) +
+  # ggplot2::scale_x_log10() +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(legend.position=c(.99, .99),
+        legend.justification = c("right","top"),
+        panel.grid.major = ggplot2::element_line(colour = "whitesmoke"))
 hey <- df %>% 
   dplyr::select(X, Job_Type, Skill) %>% 
   # dplyr::slice(1:1000) %>%
