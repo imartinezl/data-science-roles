@@ -218,4 +218,15 @@ word_cors %>%
   ggplot2::theme(text = ggplot2::element_text(family = "Roboto Condensed"))
 
 
+# Latent Dirichlet allocation (LDA) ---------------------------------------
 
+# Every document is a mixture of topics
+# Every topic is a mixture of words
+# For this we need a document-term-matrix format
+
+dfm_words <- df_words %>% 
+  dplyr::count(id, word, sort = T) %>% 
+  tidytext::cast_dtm(document = id, term = word, value=n)
+
+lda <- topicmodels::LDA(dfm_words, k = 2, control = list(seed = 1234))
+lda
