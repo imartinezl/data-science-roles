@@ -91,82 +91,56 @@ company_sector <- c("Consulting.and.Business.Services","Internet.and.Software",
 plot_mean_count(df, company_sector)
 
 
-# Clustering Attempt ------------------------------------------------------
 
-df_cluster <- df %>%
-  dplyr::select(Job_Type, technologies) %>% 
-  dplyr::mutate(Job_Type = as.numeric(as.factor(Job_Type))) %>% as.matrix()
-df_cluster <-  df %>%  dplyr::select(technologies)
-cl <- stats::kmeans(df_cluster, centers = 3, nstart = 10)
-table(cl$cluster, df$Job_Type)
-ks <- 1:20
-tot_within_ss <- sapply(ks, function(k) {
-  cl <- stats::kmeans(kmeans_df, k, nstart = 10)
-  cl$tot.withinss
-})
-plot(ks, tot_within_ss, type = "b")
-
-
-pr <- prcomp(x = df %>% dplyr::select(technologies), scale = F)
-summary(pr)
-biplot(pr)
-PCbiplot(pr)
-
-
-# Skills ------------------------------------------------------------------
+# Skills Extraction -------------------------------------------------------
 
 extract_skills <- function(t){
   t %>% stringr::str_replace_all("\\[|\\]|'", "") %>% stringr::str_split(',') %>% unlist %>% stringr::str_trim() %>% list()
 }
-skills_freq <- df %>% 
-  dplyr::select(X, Job_Type, Skill) %>% 
-  # dplyr::filter(Skill != "") %>% 
-  dplyr::slice(1:1000) %>% 
+skills_ext <- df %>% 
+  # dplyr::slice(1:200) %>% 
+  dplyr::filter(Skill != "") %>% 
   dplyr::rowwise() %>% 
   dplyr::mutate(skill = extract_skills(Skill),
                 nskills = length(skill)) %>% 
   dplyr::ungroup() %>% 
   tidyr::unnest(skill) %>% 
+  dplyr::select(X, Job_Type, skill, nskills)
+skills_ext
+
+
+# Skills Wordcloud ------------------------------------------------------------------
+
+skills_freq <- skills_ext %>% 
   dplyr::group_by(skill) %>% 
   dplyr::summarise(freq = n(),
-                   mean_per_job = mean(nskills)) %>% 
+                   mean_nskills_per_job = mean(nskills)) %>% 
   dplyr::ungroup()
-wordcloud::wordcloud(words = skills_freq$skills, freq = skills_freq$freq, max.words = 200,
+wordcloud::wordcloud(words = skills_freq$skill, freq = skills_freq$freq, max.words = 200,
                      random.order = F, random.color = F, scale = c(2,0.8), rot.per = 0,
                      colors = RColorBrewer::brewer.pal(9,"Reds")[3:9], min.freq = 10)
 
 skills_freq %>% 
   ggplot2::ggplot()+
-  ggrepel::geom_text_repel(ggplot2::aes(x=mean_per_job, y=freq, label=skill,
-                                        size=freq, color=mean_per_job), segment.alpha = 0)+
+  ggrepel::geom_text_repel(ggplot2::aes(x=mean_nskills_per_job, y=freq, label=skill,
+                                        size=freq, color=mean_nskills_per_job), segment.alpha = 0)+
   ggplot2::scale_color_gradient(low="green3", high="violetred", trans = "log10",
-                       guide = ggplot2::guide_colourbar(direction = "horizontal", title.position ="top")) +
+                                guide = ggplot2::guide_colourbar(direction = "horizontal", title.position ="top")) +
   ggplot2::scale_size_continuous(range = c(3, 10), guide = FALSE) +
-  # ggplot2::scale_x_log10() +
   ggplot2::theme_minimal() +
   ggplot2::theme(legend.position=c(.99, .99),
-        legend.justification = c("right","top"),
-        panel.grid.major = ggplot2::element_line(colour = "whitesmoke"))
-hey <- df %>% 
-  dplyr::select(X, Job_Type, Skill) %>% 
-  # dplyr::slice(1:1000) %>%
-  dplyr::rowwise() %>% 
-  dplyr::mutate(skills = extract_skills(Skill)) %>% 
-  tidyr::unnest(skills) %>% mutate(value=1) %>% tidyr::spread(skills, value, fill=0)
+                 legend.justification = c("right","top"),
+                 panel.grid.major = ggplot2::element_line(colour = "whitesmoke"))
 
-n <- nrow(hey)
-skills_names <- colnames(hey)[4:ncol(hey)]
-hey %>% 
-  dplyr::select(skills_names) %>% 
-  dplyr::summarise_all(sum) %>% 
-  tidyr::gather(key,value) %>% 
-  dplyr::mutate(value = value/n) %>% 
-  ggplot2::ggplot()+
-  ggplot2::geom_col(ggplot2::aes(x=reorder(key, value),y=value), width=1)+ 
-  ggplot2::coord_flip()+
-  ggplot2::theme(axis.text.y = ggplot2::element_text(size=6))
+# Skills Frequency --------------------------------------------------------
+skills_onehot <- skills_ext %>% 
+  dplyr::mutate(value=1) %>% 
+  tidyr::spread(skill, value, fill=0)
 
-hey %>% 
+n <- nrow(skills_onehot)
+skills_names <- colnames(skills_onehot)[4:ncol(skills_onehot)]
+
+skills_onehot %>% 
   dplyr::select(skills_names) %>% 
   dplyr::summarise_all(sum) %>% 
   tidyr::gather(key,value) %>% 
@@ -179,7 +153,150 @@ hey %>%
   ggplot2::labs(x=NULL,y=NULL)+
   ggplot2::scale_y_continuous(limits=c(0,1), breaks=c(0,1))+
   ggplot2::coord_flip()+
-  ggplot2::facet_wrap(group~., ncol = 5, scales="free_y")+
+  ggplot2::facet_wrap(group~., scales="free_y")+
+  ggplot2::theme(axis.text.y = ggplot2::element_text(size=8),
+                 strip.background = ggplot2::element_blank(),
+                 strip.text = ggplot2::element_blank())
+
+skills_ext %>% 
+  dplyr::group_by(Job_Type, skill) %>% 
+  dplyr::summarise(freq = n()) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(-freq) %>% 
+  dplyr::top_n(100, freq) %>% 
+  ggplot2::ggplot()+
+  ggplot2::geom_col(ggplot2::aes(x=reorder(skill,freq), y=freq, fill=Job_Type), width=1)+
+  ggplot2::labs(x=NULL,y=NULL)+
+  ggplot2::coord_flip()+
+  ggplot2::facet_grid(cols=vars(Job_Type), scales="free_y")+
   ggplot2::theme(axis.text.y = ggplot2::element_text(size=8),
                  strip.background = ggplot2::element_blank(),
                  strip.text = ggplot2::element_blank(),)
+
+
+# Naive Bayes -------------------------------------------------------------
+
+n <- 15
+mostfreq_skills <- skills_ext %>% 
+  dplyr::group_by(skill) %>% 
+  dplyr::summarise(freq = n()) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(-freq) %>% 
+  dplyr::top_n(n, freq)
+
+df_cluster <- skills_onehot %>% 
+  dplyr::select(Job_Type, mostfreq_skills$skill) %>% 
+  dplyr::mutate(Job_Type = as.factor(Job_Type))
+factor(df$Job_Type) %>% levels()
+df_cluster %>% unique() %>% nrow()
+
+
+y <- "Job_Type"
+set.seed(1)
+trainIndex <- caret::createDataPartition(df_cluster[[y]], p=0.7)$Resample1
+train <- df_cluster[trainIndex, ]
+test <- df_cluster[-trainIndex, ]
+model_summary <- function(model, y){
+  trainPred <- predict(model, newdata = train, type = "class")
+  trainTable <- table(train[[y]], trainPred)
+  testPred <- predict(model, newdata=test, type="class")
+  testTable <- table(test[[y]], testPred)
+  trainAcc <- sum(diag(trainTable))/sum(trainTable)
+  testAcc <- sum(diag(testTable))/sum(testTable)
+  message("Contingency Table for Training Data")
+  print(trainTable)
+  message("Contingency Table for Test Data")
+  print(testTable)
+  message("Accuracy")
+  print(round(cbind(trainAccuracy=trainAcc, testAccuracy=testAcc),3))
+}
+
+# Naive Bayes
+f <- as.formula(paste(y,'~.'))
+NB <- e1071::naiveBayes(f, data=train)
+NB
+model_summary(NB, y)
+
+model_training <- function(n){
+  mostfreq_skills <- skills_ext %>% 
+    dplyr::group_by(skill) %>% 
+    dplyr::summarise(freq = n()) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::arrange(-freq) %>% 
+    dplyr::top_n(n, freq)
+  
+  df_cluster <- skills_onehot %>% 
+    dplyr::select(Job_Type, mostfreq_skills$skill) %>% 
+    dplyr::mutate(Job_Type = as.factor(Job_Type))
+  nunique <- df_cluster %>% unique() %>% nrow()
+  
+  y <- "Job_Type"
+  set.seed(1)
+  trainIndex <- caret::createDataPartition(df_cluster[[y]], p=0.7)$Resample1
+  train <- df_cluster[trainIndex, ]
+  test <- df_cluster[-trainIndex, ]
+  
+  f <- as.formula(paste(y,'~.'))
+  model <- e1071::naiveBayes(f, data=train)
+  
+  trainPred <- predict(model, newdata = train, type = "class")
+  trainTable <- table(train[[y]], trainPred)
+  testPred <- predict(model, newdata=test, type="class")
+  testTable <- table(test[[y]], testPred)
+  trainAcc <- sum(diag(trainTable))/sum(trainTable)
+  testAcc <- sum(diag(testTable))/sum(testTable)
+  
+  # print(n, trainAcc, testAcc)
+  data.frame(n, trainAcc, testAcc)
+}
+training_results <- pbapply::pblapply(seq(1,50,by=1), model_training, cl = 4) %>% 
+  dplyr::bind_rows()
+training_results %>%
+  tidyr::gather(key, value, -n) %>% 
+  ggplot2::ggplot()+
+  ggplot2::geom_line(ggplot2::aes(x=n, y=value, color=key))+
+  ggplot2::scale_y_continuous(limits=c(0,1))
+training_results[which.max(training_results$trainAcc)] #70
+
+
+
+
+
+# Clustering Technologies ------------------------------------------------
+
+df_cluster <-  df %>%  dplyr::select(technologies)
+cl <- stats::kmeans(df_cluster[,-1], centers = 3, nstart = 20)
+table(cl$cluster, df_cluster$Job_Type)
+ks <- 1:20
+tot_within_ss <- sapply(ks, function(k) {
+  cl <- stats::kmeans(kmeans_df, k, nstart = 10)
+  cl$tot.withinss
+})
+plot(ks, tot_within_ss, type = "b")
+
+
+pr <- prcomp(x = df_cluster[,-1], scale = F)
+summary(pr)
+biplot(pr)
+PCbiplot(pr)
+
+binary_cor <- function(m){
+  (crossprod(m) + crossprod(!m))/ nrow(m)
+}
+one_cor <- function(m){
+  res <- data.frame()
+  for(i in seq(ncol(m))){
+    z <- m[,i]
+    z <- apply(m,2,function(x){sum(x==z & x==1)/sum(x==1)})
+    res <- rbind(res,z)
+  }
+  colnames(res) <- colnames(m)
+  rownames(res) <- colnames(m)
+  res <- as.matrix(res)
+  res
+}
+# corr_pearson <- cor(df_cluster, method = "pearson")
+# corr_bin <- binary_cor(df_cluster)
+corr_one <- one_cor(df_cluster)
+# corrplot::corrplot(corrmatrix, method = "square", order = "FPC")
+
