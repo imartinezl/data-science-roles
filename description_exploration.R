@@ -209,7 +209,7 @@ set.seed(2016)
 ar <- grid::arrow(type = "closed", length = grid::unit(.15, "inches"))
 word_cors %>%
   dplyr::filter(item1 %in% c("data", "machine", "business","engineer","analyst","scientist")) %>% 
-  dplyr::filter(correlation > 0.15) %>%
+  dplyr::filter(abs(correlation) > 0.15) %>%
   igraph::graph_from_data_frame() %>%
   ggraph::ggraph(layout = "fr") +
   ggraph::geom_edge_link(ggplot2::aes(edge_alpha = scales::rescale(correlation, c(0.15, 1))), 
