@@ -173,9 +173,11 @@ df_ngrams %>%
   # dplyr::top_n(10, -n) %>% 
   igraph::graph_from_data_frame() %>% 
   ggraph::ggraph(layout = "fr") +
-  ggraph::geom_edge_link(ggplot2::aes(edge_alpha = scales::rescale(n, c(0.15, 1))), 
-                         show.legend = FALSE, arrow = ar, end_cap = ggraph::circle(.07, 'inches')) +
-  ggraph::geom_node_point(color = "lightblue", size = 3) +
+  ggraph::geom_edge_link(ggplot2::aes(edge_alpha = scales::rescale(n, c(0.15, 1)),
+                                      edge_width = scales::rescale(n, c(1, 5))), 
+                         show.legend = FALSE, edge_colour = "cyan4",
+                         arrow = ar, end_cap = ggraph::circle(.07, 'inches')) +
+  ggraph::geom_node_point(color = "black", size = 3) +
   ggraph::geom_node_text(ggplot2::aes(label = name), vjust = 1, hjust = 1)+
   ggplot2::theme_void()
 
@@ -224,9 +226,37 @@ word_cors %>%
 # Every topic is a mixture of words
 # For this we need a document-term-matrix format
 
-dfm_words <- df_words %>% 
+dtm_words <- df_words %>% 
   dplyr::count(id, word, sort = T) %>% 
   tidytext::cast_dtm(document = id, term = word, value=n)
 
-lda <- topicmodels::LDA(dfm_words, k = 2, control = list(seed = 1234))
-lda
+lda <- topicmodels::LDA(dtm_words, k = 2, 
+                        control = list(seed = 1234, verbose=1))
+topics <- tidytext::tidy(lda, matrix = "beta")
+
+topics %>%
+  dplyr::group_by(topic) %>%
+  dplyr::top_n(20, beta) %>%
+  dplyr::ungroup() %>%
+  dplyr::arrange(topic, -beta) %>%
+  dplyr::mutate(term = tidytext::reorder_within(term, beta, topic)) %>%
+  ggplot2::ggplot(ggplot2::aes(term, beta, fill = factor(topic))) +
+  ggplot2::geom_col(show.legend = FALSE) +
+  ggplot2::facet_wrap(~ topic, scales = "free") +
+  ggplot2::coord_flip() +
+  tidytext::scale_x_reordered()
+
+topics %>%
+  dplyr::mutate(topic = paste0("topic", topic)) %>%
+  tidyr::spread(topic, beta) %>%
+  dplyr::filter_at(vars(starts_with("topic")), dplyr::any_vars(. > 0.001)) %>%
+  dplyr::mutate(log_ratio = log2(topic2 / topic1))
+
+documents <- tidytext::tidy(lda, matrix = "gamma")
+
+documents %>%
+  dplyr::group_by(document) %>%
+  dplyr::top_n(1, gamma) %>%
+  dplyr::ungroup()
+
+assignments <- tidytext::augment(lda, data = dtm_words)
