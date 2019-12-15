@@ -165,6 +165,29 @@ df_ngrams %>%
 set.seed(100)
 ar <- grid::arrow(type = "closed", length = grid::unit(.15, "inches"))
 df_ngrams %>%
+  # dplyr::slice(1:10000) %>% 
+  tidyr::separate(ngram, paste0("word", 1:ng), sep = " ") %>% 
+  dplyr::filter_at(vars(starts_with("word")), all_vars(!(. %in% stop_words$word))) %>% 
+  dplyr::group_by_at(vars(starts_with("word"), Job_Type)) %>% 
+  dplyr::summarise(n=n()) %>%
+  dplyr::ungroup() %>% 
+  dplyr::filter(n > 100) %>% 
+  # dplyr::top_n(10, -n) %>% 
+  # igraph::graph_from_data_frame() %>% 
+  tidygraph::as_tbl_graph() %>% 
+  ggraph::ggraph(layout = "fr") +
+  ggraph::geom_edge_fan(ggplot2::aes(edge_alpha = scales::rescale(n, c(0.15, 1)),
+                                      edge_width = scales::rescale(n, c(1, 5)),
+                                      edge_colour = Job_Type), 
+                         show.legend = FALSE, # edge_colour = "cyan4",
+                         arrow = ar, end_cap = ggraph::circle(.07, 'inches')) +
+  ggraph::geom_node_point(color = "black", size = 3) +
+  ggraph::geom_node_text(ggplot2::aes(label = name), vjust = 1, hjust = 1)+
+  ggraph::scale_edge_color_discrete()+
+  ggplot2::theme_void()
+
+
+df_ngrams %>%
   tidyr::separate(ngram, paste0("word", 1:ng), sep = " ") %>% 
   dplyr::filter_at(vars(starts_with("word")), all_vars(!(. %in% stop_words$word))) %>% 
   dplyr::group_by_at(vars(starts_with("word"))) %>% 
@@ -180,7 +203,6 @@ df_ngrams %>%
   ggraph::geom_node_point(color = "black", size = 3) +
   ggraph::geom_node_text(ggplot2::aes(label = name), vjust = 1, hjust = 1)+
   ggplot2::theme_void()
-
 
 # Pairs of words with the widyr package -----------------------------------
 
