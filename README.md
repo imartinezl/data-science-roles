@@ -1,5 +1,7 @@
 # data-science-roles
 
+![](figures/Data Science Roles and Skills.png)
+
 ## Setup for scraping
 
 virtualenv venv --python=python3
