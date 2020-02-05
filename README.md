@@ -1,6 +1,6 @@
 # data-science-roles
 
-![](figures/Data Science Roles and Skills.png)
+<img src="figures/Data Science Roles and Skills.png"/>
 
 ## Setup for scraping
 
