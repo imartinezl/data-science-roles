@@ -4,3 +4,4 @@ venv/*
 .Rproj.user
 .Rhistory
 tecnun_pfg
+data
