@@ -2,7 +2,6 @@
 # LIBRARIES & IMPORT DATA -------------------------------------------------
 
 library(dplyr)
-setwd("~/Documents/data-science-roles")
 
 file_path <- 'data/indeed_job_dataset.csv'
 df <- read.csv(file = file_path, stringsAsFactors = F)

@@ -13,8 +13,8 @@ pip install beautifulsoup4 matplotlib numpy pandas
 ## Datasets
 
 - [Data Scientist Job Market in the U.S.](https://www.kaggle.com/sl6149/data-scientist-job-market-in-the-us)
-- [US jobs on Monster.com	Kaggle](https://www.kaggle.com/PromptCloudHQ/us-jobs-on-monstercom)
-- [Google Job Skills](https://www.kaggle.com/niyamatalmass/google-job-skills)
+- [US jobs on Monster.com Kaggle](https://www.kaggle.com/PromptCloudHQ/us-jobs-on-monstercom)
+- [Google Job Skills](https://www.kaggle.com/niyamatalmass/google-job-skills)	
 - [Online Job Postings](https://www.kaggle.com/madhab/jobposts)
 - [Indeed  - Data Scientist/Analyst/Engineer](https://www.kaggle.com/elroyggj/indeed--data-scientistanalystengineer)
 - [Repo for the Ideal Data Science Profiles Project](https://github.com/georgeliu1998/ideal_profiles)
