@@ -264,3 +264,5 @@ words %>%
   ggplot2::scale_alpha_continuous(range = c(0.5, 2.0))+
   ggplot2::scale_color_manual(values=c("#8338ec","#ff006e"))+
   ggplot2::theme_void()
+
+# add summary of job title from graph
