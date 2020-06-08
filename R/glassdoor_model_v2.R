@@ -14,6 +14,15 @@ if(file.exists(language_path)){
   jobtitle_lang <- cld3::detect_language(df %>% dplyr::pull(header.jobTitle))
   saveRDS(list(jobdescription_lang, jobtitle_lang), language_path)
 }
+# df %>% 
+#   dplyr::select(jobTitle = header.jobTitle,
+#                 jobDescription = job.description) %>% 
+#   dplyr::mutate(jobtitle_lang = jobtitle_lang,  
+#                 jobdescription_lang = jobdescription_lang) %>% 
+#   dplyr::filter(jobdescription_lang == "en", ) %>% 
+#   dplyr::mutate(id = 1:dplyr::n()) %>% 
+#   dplyr::select(jobTitle, jobDescription) %>% 
+#   write.csv("glassdoor_en.csv.gz", row.names = F)
 
 df_subset <- df %>% 
   dplyr::select(jobTitle = header.jobTitle,

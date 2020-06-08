@@ -3,7 +3,7 @@
 
 library(dplyr)
 
-file_path <- 'data/indeed_job_dataset.csv'
+file_path <- '../data/indeed_job_dataset.csv'
 df <- read.csv(file = file_path, stringsAsFactors = F) %>% 
   dplyr::rename(id="X")
 
