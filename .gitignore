@@ -5,3 +5,4 @@ venv/*
 .Rhistory
 tecnun_pfg
 data
+venv
