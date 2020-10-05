@@ -318,8 +318,8 @@ d <- df %>%
   # dplyr::count(jobtitle_nwords) %>% cumsum()
   # dplyr::pull(jobtitle_nwords) %>% hist(breaks=50)
   # separate jobtitle by bigrams and skills by ;
-  # tidytext::unnest_tokens(output=jobtitle, input=jobtitle, token= "ngrams", n=2, to_lower = T, drop = T) %>%
-  tidytext::unnest_tokens(output=jobtitle_ngrams, input=jobtitle, token= "skip_ngrams", n_min=2, n=4, k=2, to_lower = T, drop = F) %>%  
+  # tidytext::unnest_tokens(output=jobtitle_ngrams, input=jobtitle, token= "ngrams", n=2, to_lower = T, drop = F) %>%
+  tidytext::unnest_tokens(output=jobtitle_ngrams, input=jobtitle, token= "skip_ngrams", n_min=2, n=3, k=0, to_lower = T, drop = F) %>%
   # dplyr::count(jobtitle) %>% 
   dplyr::add_count(jobtitle_ngrams, sort=F, name="jobtitle_ngrams_count") %>% 
   dplyr::mutate(jobtitle_ngrams_count_rel = jobtitle_ngrams_count/max(jobtitle_ngrams_count),
@@ -342,7 +342,13 @@ d <- df %>%
 # - ngrams that are more reprentative of the original jobtitle (IMPORTANT)
 # - ngrams with more frequent number of words (NAH)
 d %>% 
-  dplyr::pull(jobtitle_weight) %>% sort() %>% plot %>% abline(h=seq(0,1,by=0.05), col='red')
+  dplyr::pull(jobtitle_weight) %>% sort(decreasing = T) %>% plot %>% abline(h=seq(0,1,by=0.05), col='red')
+
+d %>%
+  dplyr::group_by(jobtitle_ngrams) %>% 
+  dplyr::summarise(jobtitle_weight_mean = mean(jobtitle_weight)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::pull(jobtitle_weight_mean) %>% sort(decreasing = T) %>% plot %>% abline(h=seq(0,1,by=0.05), col='red') %>% abline(v=c(20,50,100,200), col='blue')
 
 
 conversions_skills <- list(
@@ -357,7 +363,8 @@ conversions_skills <- list(
     "rup", "cmmi", "tdd",
     "bpo", "eai", "edi",
     "csm", "ooad", "sem",
-    "seo", "sla", "vdi"
+    "seo", "sla", "vdi",
+    "sdlc", "pmp", "ccna"
   ),
   to   = c(
     "service oriented architecture", "microsoft office", "information technology infrastructure library",
@@ -370,14 +377,15 @@ conversions_skills <- list(
     "rational unified process", "capability maturity model integration", "test driven development",
     "business process outsourcing", "enterprise application integration", "enterprise data integration",
     "customer service management", "object oriented analysis design", "search engine marketing",
-    "search engine optimization", "software license agreement", "virtual desktop infrastructure"
+    "search engine optimization", "software license agreement", "virtual desktop infrastructure",
+    "software development life cycle", "project management professional", "cisco certified network associate"
   )
 )
 conversions_skills$from <- paste("^", conversions_skills$from, "$", sep="")
 
 d %>% 
-  # filter less important jobs
-  dplyr::filter(jobtitle_weight > 0.25) %>%
+  # filter most important jobs
+  dplyr::filter(jobtitle_weight > 0.15) %>%
   dplyr::mutate(jobtitle_graph = jobtitle_ngrams) %>% 
   # separate skills by ";"
   tidytext::unnest_tokens(output=skills, input=skills, token= stringr::str_split, pattern = ";", to_lower=T, drop=T) %>% 
@@ -404,35 +412,233 @@ d %>%
   dplyr::group_by(id, jobtitle_graph) %>% 
   dplyr::summarise(skills = paste0(skills_unigrams_tmp, collapse = " ")) %>% 
   dplyr::ungroup() %>% 
+  # count skills in jobtitles
   dplyr::count(jobtitle_graph, skills, name="count_pair", sort=T) %>% 
   # tidytext::bind_tf_idf(term = skills, document = jobtitle, count_pair) %>%
   # widyr::pairwise_count(skills, jobtitle) %>%
   # widyr::pairwise_cor(skills, jobtitle, sort = T, upper=F) %>% 
+  # remove skills that are jobtitles or viceversa
   dplyr::filter(jobtitle_graph != skills) %>% 
+  # remove count pairs with less than two repetitions
+  dplyr::filter(count_pair > 2) %>% 
+  # filter top n skills per jobtitle
   dplyr::group_by(jobtitle_graph) %>% 
-  dplyr::top_n(n = 1, wt=count_pair) %>% 
+  # dplyr::top_n(n = 1, wt=count_pair) %>%
+  dplyr::slice_max(order_by = count_pair, n=5, with_ties=F) %>%
   dplyr::ungroup() %>% 
   tidygraph::as_tbl_graph() %>% 
   tidygraph::activate(nodes) %>% 
   tidygraph::mutate(
     source = tidygraph::node_is_source(),
+    # source = (name %in% d$jobtitle) & !(name %in% d$skills),
     # count = merge(., data.frame(node=c(d$jobtitle, d$skills)) %>%
     #                 dplyr::filter(node %in% name) %>%
     #                 dplyr::count(node), by.x="name", by.y="node", sort=F) %>%
     #   dplyr::pull(n)
   ) %>% 
   # tidygraph::activate(edges) %>% 
-  # ggraph::ggraph(layout = "fr") +
-  ggraph::ggraph(layout = "grid") +
-  # ggraph::geom_edge_bend(ggplot2::aes(edge_width=count_pair),
-  #                        strength = 0.5, show.legend = F, edge_color="#000000",
-  #                        start_cap = ggraph::rectangle(width = 0.6, height = 0.2, 'inches'),
-  #                        end_cap = ggraph::rectangle(width = 0.6, height = 0.2, 'inches')) +
+  # ggraph::ggraph(layout = "lgl") +
+  ggraph::ggraph(layout = "fr") +
+  ggraph::geom_edge_bend(ggplot2::aes(edge_width=count_pair),
+                         strength = 0.5, show.legend = F, edge_color="#000000",
+                         start_cap = ggraph::rectangle(width = 0.6, height = 0.2, 'inches'),
+                         end_cap = ggraph::rectangle(width = 0.6, height = 0.2, 'inches')) +
   ggraph::geom_node_label(ggplot2::aes(label = stringr::str_wrap(name, width=10), color=source), 
-                          family="Roboto Medium", lineheight = .8, #size=4, 
+                          family="Roboto Medium", lineheight = .8, 
+                          size=3, label.padding = grid::unit(0.1, "lines"),
                           repel = F, show.legend = F) +
   ggraph::scale_edge_width_continuous(range=c(0.1,2))+
   # ggplot2::scale_size_continuous(range = c(3, 5))+
   # ggplot2::scale_alpha_continuous(range = c(0.5, 2.0))+
-  ggplot2::scale_color_manual(values=c("#8338ec","#ff006e"))+
+  ggplot2::scale_color_manual(values=c("#8338ec", "#ff006e"))+
   ggplot2::theme_void()
+
+
+
+# SKILLS VS JOBTITLE GEPHI -------------------------------------------------
+
+outfile <- "data/linkedin/data_linkedin.csv"
+df <- read.csv(outfile, stringsAsFactors = F)
+
+industry_whitelist <- c("Computer Software", "Computer Networking", 
+                        "Research", "Information Technology and Services")
+industry_whitelist <- c("Information Technology and Services")
+
+extrawords <- "
+dev, scrummaster, frontend, ph.d, phd, ceo, cto, cco, 
+sr, phd, gis, microsoft, sharepoint, ict, erp, cto, 
+emea, seo, sales, presales, ibm, crm, analytics, 
+research, designer, product, solution, solutions, manager, delivery
+" %>%
+  stringr::str_split(',') %>%
+  unlist() %>% 
+  stringr::str_trim() %>% 
+  unique()
+dictionary <- hunspell::dictionary(lang="en_US", add_words = extrawords)
+
+translations_jobtitle <- list(
+  from = c(
+    "sr", "pm", "bpm", "hr",
+    "ceo", "cto", "coo",
+    "cfo", "cco", "crm",
+    "abap", "de", "qa", "dba",
+    "bi", "erp", "ict",
+    "pmo", "gis", "tech", "seo",
+    "desk", "gerente", "emea", "i.t", "it",
+    "fico", "ax", "mm", "manger", "asst", "techno", "db"
+  ),
+  to   = c(
+    "senior", "project manager", "business process manager", "human resources",
+    "chief executive officer", "chief technology officer", "chief operations officer", 
+    "chief finance officer", "chief compliance officer", "customer relationship management",
+    "advanced business application programming", "", "quality analyst", "database administrator",
+    "business intelligence", "enterprise resource planning", "information communications technologies",
+    "project management office", "geographic information system", "technology", "search engine optimization",
+    "desktop", "manager", "europe middle east africa", "information technology", "information technology", 
+    "finance controlling", "", "marketing manager", "manager", "assistant", "technology", "database"
+  )
+)
+translations_jobtitle$from <- paste("^", translations_jobtitle$from, "$", sep="")
+
+
+translations_skills <- list(
+  from = c(
+    "soa", "ms", "itil",
+    "iis", "wcf", "crm",
+    "oop", "pmo", "db", "hr",
+    "svn", "abap", "jms", 
+    "ccnp", "pmi",
+    "mcse", "bi", "sd",
+    "adf", "biztalk", "cvs",
+    "rup", "cmmi", "tdd",
+    "bpo", "eai", "edi",
+    "csm", "ooad", "sem",
+    "seo", "sla", "vdi",
+    "sdlc", "pmp", "ccna"
+  ),
+  to   = c(
+    "service oriented architecture", "microsoft office", "information technology infrastructure library",
+    "internet information services", "web component framework", "customer relationship management",
+    "object oriented programming", "project management office", "database", "human resources",
+    "subversion", "advanced business application programming", "java message service",
+    "cisco certified network professional", "performance monitoring infrastructure",
+    "microsoft certified systems engineer", "business intelligence", "software development",
+    "automatic direction finder", "business talk", "concurrent versions system",
+    "rational unified process", "capability maturity model integration", "test driven development",
+    "business process outsourcing", "enterprise application integration", "enterprise data integration",
+    "customer service management", "object oriented analysis design", "search engine marketing",
+    "search engine optimization", "software license agreement", "virtual desktop infrastructure",
+    "software development life cycle", "project management professional", "cisco certified network associate"
+  )
+)
+translations_skills$from <- paste("^", translations_skills$from, "$", sep="")
+
+d <- df %>% 
+  # filter industry
+  dplyr::filter(industry %in% industry_whitelist) %>%
+  dplyr::select(jobtitle, skills) %>% 
+  dplyr::mutate(jobtitle_id = dplyr::row_number()) %>% 
+  # separate into unigrams
+  tidytext::unnest_tokens(output=jobtitle_unigrams, input=jobtitle, token="words", to_lower = T, drop = T) %>%
+  # filter stopwords
+  dplyr::filter(!jobtitle_unigrams %in% tidytext::stop_words$word) %>% 
+  # stem words
+  dplyr::mutate(jobtitle_unigrams_tmp = hunspell::hunspell_stem(jobtitle_unigrams, dictionary)) %>% 
+  dplyr::rowwise() %>%
+  dplyr::mutate(jobtitle_unigrams_tmp = dplyr::first(jobtitle_unigrams_tmp)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::filter(!is.na(jobtitle_unigrams_tmp)) %>% 
+  # remove numbers
+  dplyr::mutate(jobtitle_unigrams_tmp = stringr::str_remove_all(jobtitle_unigrams_tmp, '\\w*[0-9]+\\w*\\s*')) %>% 
+  # manual translation
+  dplyr::mutate(jobtitle_unigrams_tmp = stringi::stri_replace_all_regex(jobtitle_unigrams_tmp, 
+                                                                        translations_jobtitle$from, 
+                                                                        translations_jobtitle$to, 
+                                                                        vectorize_all = F)) %>% 
+  # collapse jobtitle
+  dplyr::group_by(jobtitle_id, skills) %>% 
+  dplyr::summarise(jobtitle = paste0(jobtitle_unigrams_tmp, collapse = " ")) %>% 
+  dplyr::ungroup() %>% 
+  # analyze number of words in jobtitle
+  dplyr::mutate(jobtitle_nwords = stringr::str_count(jobtitle, pattern = "\\w+")) %>% 
+  dplyr::add_count(jobtitle_nwords, sort=F, name="jobtitle_nwords_count") %>% 
+  dplyr::mutate(jobtitle_nwords_count_rel = jobtitle_nwords_count/max(jobtitle_nwords_count)) %>% # distribution of (number of words) in original jobtitle
+  # separate jobtitle by bigrams and skills by ;
+  # tidytext::unnest_tokens(output=jobtitle_ngrams, input=jobtitle, token= "ngrams", n=2, to_lower = T, drop = F) %>%
+  tidytext::unnest_tokens(output=jobtitle_ngrams, input=jobtitle, token= "skip_ngrams", n_min=2, n=3, k=0, to_lower = T, drop = F) %>%
+  # dplyr::add_count(jobtitle_ngrams, sort=F, name="jobtitle_ngrams_count") %>% 
+  # dplyr::mutate(jobtitle_ngrams_count_rel = jobtitle_ngrams_count/max(jobtitle_ngrams_count),  # distribution of each ngram among all the ngrams
+  #               jobtitle_ngrams_nwords = stringr::str_count(jobtitle_ngrams, pattern = "\\w+"),
+  #               jobtitle_ngrams_nwords_ratio = jobtitle_ngrams_nwords/jobtitle_nwords) %>% # ratio between (number of words) in ngram and the (number of words) in original jobtitle
+  # dplyr::add_count(jobtitle_ngrams_nwords, sort=F, name="jobtitle_ngrams_nwords_count") %>% 
+  # dplyr::mutate(jobtitle_ngrams_nwords_count_rel = jobtitle_ngrams_nwords_count/max(jobtitle_ngrams_nwords_count)) %>% # distribution of (number of words) in ngrams jobtitle
+  # give more weight to: 
+  # - jobtitles with more frequent number of words, (YES)
+  # - ngrams that are more popular (YES)
+  # - ngrams that are more reprentative of the original jobtitle (IMPORTANT)
+  # - ngrams with more frequent number of words (NAH)
+  # dplyr::mutate(jobtitle_weight = (jobtitle_nwords_count_rel*jobtitle_ngrams_count_rel*jobtitle_ngrams_nwords_ratio)^(1/3)) %>% 
+  # filter most important jobs
+  # dplyr::filter(jobtitle_weight > 0.15) %>%
+  # dplyr::mutate(jobtitle_graph = jobtitle_ngrams) %>% 
+  # separate skills by ";"
+  tidytext::unnest_tokens(output=skills, input=skills, token= stringr::str_split, pattern = ";", to_lower=T, drop=T) %>% 
+  tidyr::drop_na() %>% 
+  dplyr::mutate(id = dplyr::row_number()) %>% 
+  # separate skills into unigrams
+  tidytext::unnest_tokens(output=skills_unigrams, input=skills, token="words", to_lower = T, drop = T) %>%
+  # filter stopwords
+  dplyr::filter(!skills_unigrams %in% tidytext::stop_words$word) %>% 
+  # manual translation
+  dplyr::mutate(skills_unigrams_tmp = stringi::stri_replace_all_regex(skills_unigrams, 
+                                                                      translations_skills$from, 
+                                                                      translations_skills$to, 
+                                                                      vectorize_all = F)) %>% 
+  # join back the skills unigrams
+  dplyr::group_by(id, jobtitle_ngrams) %>% 
+  dplyr::summarise(skills = paste0(skills_unigrams_tmp, collapse = " ")) %>% 
+  dplyr::ungroup()
+
+
+  # count skills frequency
+  # dplyr::add_count(skills,  sort = F, name = "skills_weight") %>% head
+# count skills in jobtitles
+  # dplyr::count(jobtitle_graph, skills, name="count_pair", sort=T)
+  # remove skills that are jobtitles or viceversa
+  # dplyr::filter(jobtitle_graph != skills) %>% 
+  # remove count pairs with less than two repetitions
+  # dplyr::filter(count_pair > 2) %>% 
+  # filter top n skills per jobtitle
+  # dplyr::group_by(jobtitle_graph) %>% 
+  # dplyr::slice_max(order_by = count_pair, n=5, with_ties=F) %>%
+  # dplyr::ungroup() %>% 
+
+
+d$jobtitle_ngrams %>% unique %>% length
+d$skills %>% unique %>% length
+
+nodes <- d %>% 
+  dplyr::select(-id) %>%
+  tidyr::gather(key, value) %>% 
+  dplyr::distinct() %>% 
+  dplyr::mutate(id = dplyr::row_number())
+
+edges <- d %>% 
+  dplyr::count(jobtitle_ngrams, skills, name="count_pair", sort=F) %>% 
+  dplyr::filter(count_pair > 1) %>% 
+  # dplyr::slice(1:1000) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(
+    jobtitle_id = nodes %>% dplyr::filter(key=="jobtitle_ngrams", jobtitle_ngrams == value) %>% dplyr::pull(id),
+    skills_id = nodes %>% dplyr::filter(key=="skills", skills == value) %>% dplyr::pull(id)
+  )
+
+nodes <- nodes %>% 
+  dplyr::filter(id %in% c(edges$jobtitle_id, edges$skills_id))
+
+rgexf::write.gexf(nodes = nodes %>% dplyr::select(id, lable=value), 
+                  edges = edges %>% dplyr::select(source=jobtitle_id, target=skills_id),
+                  nodesAtt = nodes %>% dplyr::select(type=key), 
+                  edgesAtt = edges %>% dplyr::select(weight=count_pair),
+                  output = "lesmis2.gexf")
+
