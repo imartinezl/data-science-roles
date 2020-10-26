@@ -6,7 +6,7 @@ df <- data.table::fread(file_path)
 
 
 df_subset <- df %>% 
-  dplyr::sample_n(5000)
+  dplyr::sample_n(1000)
 
 
 
@@ -173,6 +173,9 @@ x_vocabulary[as.matrix(x_text_vectorization(matrix(x_text$text[i], ncol = 1)))]
 
 y_pred_i <- model %>% 
   keras::predict_on_batch(x_text$text[i])
+y_pred_i <- model %>% 
+  # keras::predict_on_batch("r python experience research statistics visualization analysis")
+keras::predict_on_batch("business team financial communication quality support project")
 # round() %>% 
 # apply(1, function(x) paste(y_vocabulary[which(x==1)-1], collapse = ", "))
 
@@ -185,4 +188,7 @@ y_pred_index <- order(y_pred_i, decreasing = T)-1
 y_pred_index <- ifelse(y_pred_index==0, NA, y_pred_index)
 data.frame(word=y_vocabulary[y_pred_index][1:n_top], 
            prob=sort(y_pred_i, decreasing = T)[1:n_top])
+
+# save model
+# model %>% keras::save_model_tf("my_model")
 
