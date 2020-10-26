@@ -8,17 +8,25 @@ library(magrittr)
 
 # https://www.reddit.com/r/dataisbeautiful/comments/25qjpz/how_many_employees_are_moving_between_companies_oc/
 
+# https://juanitorduz.github.io/text-mining-networks-and-visualization-plebiscito-tweets/
+
+# http://dataatwork.org/data/
+
+# https://solomonmg.github.io/post/working-with-bipartite-affiliation-network-data-in-r/
 
 # PREPROCESS DATA ------------------------------------------------------
 
 folder <- 'data/linkedin/1339943811/'
-outfile <- "data/linkedin/data_linkedin.csv"
+outfile <- "data/linkedin/data_linkedin2.csv"
 files <- list.files(folder, full.names = T)
 
 process_row <- function(row){
   industry <- row$industry
   location <- row$location
-  jobtitle <- row$positions[[1]]$title
+  # jobtitle <- row$positions[[1]]$title
+  jobtitle <- row$positions %>% 
+    lapply(function(x) x$title) %>% 
+    paste(collapse = ";")
   numconnections <- gsub("[^0-9.]", "", row$`num-connections`) %>% as.numeric()
   skills <- row$skills %>% 
     stringr::str_replace_all("[^[:alpha:][:space:]]","") %>% 
@@ -304,9 +312,9 @@ d <- df %>%
   dplyr::mutate(jobtitle_unigrams_tmp = stringr::str_remove_all(jobtitle_unigrams_tmp, '\\w*[0-9]+\\w*\\s*')) %>% 
   # manual translation
   dplyr::mutate(jobtitle_unigrams_tmp = stringi::stri_replace_all_regex(jobtitle_unigrams_tmp, 
-                                                               conversions_jobtitle$from, 
-                                                               conversions_jobtitle$to, 
-                                                               vectorize_all = F)) %>% 
+                                                                        conversions_jobtitle$from, 
+                                                                        conversions_jobtitle$to, 
+                                                                        vectorize_all = F)) %>% 
   # collapse jobtitle
   dplyr::group_by(id, skills) %>% 
   dplyr::summarise(jobtitle = paste0(jobtitle_unigrams_tmp, collapse = " ")) %>% 
@@ -405,9 +413,9 @@ d %>%
   # dplyr::mutate(skills_unigrams_tmp = stringr::str_remove_all(skills_unigrams, '\\w*[0-9]+\\w*\\s*')) %>% 
   # manual translation
   dplyr::mutate(skills_unigrams_tmp = stringi::stri_replace_all_regex(skills_unigrams, 
-                                                               conversions_skills$from, 
-                                                               conversions_skills$to, 
-                                                               vectorize_all = F)) %>% 
+                                                                      conversions_skills$from, 
+                                                                      conversions_skills$to, 
+                                                                      vectorize_all = F)) %>% 
   # join back the skills unigrams
   dplyr::group_by(id, jobtitle_graph) %>% 
   dplyr::summarise(skills = paste0(skills_unigrams_tmp, collapse = " ")) %>% 
@@ -455,9 +463,10 @@ d %>%
 
 
 
-# SKILLS VS JOBTITLE GEPHI -------------------------------------------------
+# SKILLS VS JOBTITLE GRAPH -------------------------------------------------
 
 outfile <- "data/linkedin/data_linkedin.csv"
+outfile <- "data/linkedin/data_linkedin2.csv"
 df <- read.csv(outfile, stringsAsFactors = F)
 
 industry_whitelist <- c("Computer Software", "Computer Networking", 
@@ -535,7 +544,9 @@ translations_skills$from <- paste("^", translations_skills$from, "$", sep="")
 
 d <- df %>% 
   # filter industry
-  dplyr::filter(industry %in% industry_whitelist) %>%
+  dplyr::filter(industry %in% industry_whitelist) %>% 
+  # separate jobtitles by ";"
+  tidytext::unnest_tokens(output=jobtitle, input=jobtitle, token= stringr::str_split, pattern = ";", to_lower=T, drop=T) %>% 
   dplyr::select(jobtitle, skills) %>% 
   dplyr::mutate(jobtitle_id = dplyr::row_number()) %>% 
   # separate into unigrams
@@ -565,22 +576,20 @@ d <- df %>%
   dplyr::mutate(jobtitle_nwords_count_rel = jobtitle_nwords_count/max(jobtitle_nwords_count)) %>% # distribution of (number of words) in original jobtitle
   # separate jobtitle by bigrams and skills by ;
   # tidytext::unnest_tokens(output=jobtitle_ngrams, input=jobtitle, token= "ngrams", n=2, to_lower = T, drop = F) %>%
-  tidytext::unnest_tokens(output=jobtitle_ngrams, input=jobtitle, token= "skip_ngrams", n_min=2, n=3, k=0, to_lower = T, drop = F) %>%
-  # dplyr::add_count(jobtitle_ngrams, sort=F, name="jobtitle_ngrams_count") %>% 
-  # dplyr::mutate(jobtitle_ngrams_count_rel = jobtitle_ngrams_count/max(jobtitle_ngrams_count),  # distribution of each ngram among all the ngrams
-  #               jobtitle_ngrams_nwords = stringr::str_count(jobtitle_ngrams, pattern = "\\w+"),
-  #               jobtitle_ngrams_nwords_ratio = jobtitle_ngrams_nwords/jobtitle_nwords) %>% # ratio between (number of words) in ngram and the (number of words) in original jobtitle
-  # dplyr::add_count(jobtitle_ngrams_nwords, sort=F, name="jobtitle_ngrams_nwords_count") %>% 
-  # dplyr::mutate(jobtitle_ngrams_nwords_count_rel = jobtitle_ngrams_nwords_count/max(jobtitle_ngrams_nwords_count)) %>% # distribution of (number of words) in ngrams jobtitle
+  tidytext::unnest_tokens(output=jobtitle_ngrams, input=jobtitle, token= "skip_ngrams", n_min=2, n=4, k=0, to_lower = T, drop = F) %>%
+  dplyr::add_count(jobtitle_ngrams, sort=F, name="jobtitle_ngrams_count") %>%
+  dplyr::mutate(jobtitle_ngrams_count_rel = jobtitle_ngrams_count/max(jobtitle_ngrams_count),  # distribution of each ngram among all the ngrams
+                jobtitle_ngrams_nwords = stringr::str_count(jobtitle_ngrams, pattern = "\\w+"),
+                jobtitle_ngrams_nwords_ratio = jobtitle_ngrams_nwords/jobtitle_nwords) %>% # ratio between (number of words) in ngram and the (number of words) in original jobtitle
+  dplyr::add_count(jobtitle_ngrams_nwords, sort=F, name="jobtitle_ngrams_nwords_count") %>%
+  dplyr::mutate(jobtitle_ngrams_nwords_count_rel = jobtitle_ngrams_nwords_count/max(jobtitle_ngrams_nwords_count)) %>% # distribution of (number of words) in ngrams jobtitle
   # give more weight to: 
   # - jobtitles with more frequent number of words, (YES)
   # - ngrams that are more popular (YES)
   # - ngrams that are more reprentative of the original jobtitle (IMPORTANT)
   # - ngrams with more frequent number of words (NAH)
-  # dplyr::mutate(jobtitle_weight = (jobtitle_nwords_count_rel*jobtitle_ngrams_count_rel*jobtitle_ngrams_nwords_ratio)^(1/3)) %>% 
-  # filter most important jobs
-  # dplyr::filter(jobtitle_weight > 0.15) %>%
-  # dplyr::mutate(jobtitle_graph = jobtitle_ngrams) %>% 
+  dplyr::mutate(jobtitle_weight = (jobtitle_nwords_count_rel*jobtitle_ngrams_count_rel*jobtitle_ngrams_nwords_ratio)^(1/3)) %>% 
+  
   # separate skills by ";"
   tidytext::unnest_tokens(output=skills, input=skills, token= stringr::str_split, pattern = ";", to_lower=T, drop=T) %>% 
   tidyr::drop_na() %>% 
@@ -590,55 +599,188 @@ d <- df %>%
   # filter stopwords
   dplyr::filter(!skills_unigrams %in% tidytext::stop_words$word) %>% 
   # manual translation
-  dplyr::mutate(skills_unigrams_tmp = stringi::stri_replace_all_regex(skills_unigrams, 
-                                                                      translations_skills$from, 
-                                                                      translations_skills$to, 
-                                                                      vectorize_all = F)) %>% 
+  dplyr::mutate(skills_unigrams = stringi::stri_replace_all_regex(skills_unigrams, 
+                                                                  translations_skills$from, 
+                                                                  translations_skills$to, 
+                                                                  vectorize_all = F)) %>% 
   # join back the skills unigrams
-  dplyr::group_by(id, jobtitle_ngrams) %>% 
-  dplyr::summarise(skills = paste0(skills_unigrams_tmp, collapse = " ")) %>% 
-  dplyr::ungroup()
-
-
+  dplyr::group_by_at(dplyr::vars(-skills_unigrams)) %>% 
+  dplyr::summarise(skills = paste0(skills_unigrams, collapse = " ")) %>% 
+  dplyr::ungroup() %>% 
   # count skills frequency
-  # dplyr::add_count(skills,  sort = F, name = "skills_weight") %>% head
-# count skills in jobtitles
-  # dplyr::count(jobtitle_graph, skills, name="count_pair", sort=T)
-  # remove skills that are jobtitles or viceversa
-  # dplyr::filter(jobtitle_graph != skills) %>% 
-  # remove count pairs with less than two repetitions
-  # dplyr::filter(count_pair > 2) %>% 
-  # filter top n skills per jobtitle
-  # dplyr::group_by(jobtitle_graph) %>% 
-  # dplyr::slice_max(order_by = count_pair, n=5, with_ties=F) %>%
-  # dplyr::ungroup() %>% 
+  dplyr::add_count(skills,  sort = F, name = "skills_weight") %>% 
+  # count skills in jobtitles
+  dplyr::add_count(jobtitle_ngrams, skills, name="count_pair", sort=F) 
 
 
 d$jobtitle_ngrams %>% unique %>% length
 d$skills %>% unique %>% length
 
-nodes <- d %>% 
-  dplyr::select(-id) %>%
+d %>% 
+  dplyr::pull(jobtitle_weight) %>% 
+  sort(decreasing = T) %>% 
+  plot(xlim=c(0, 10000)) %>% 
+  abline(h=seq(0,1,by=0.05), col='red')
+
+d %>%
+  dplyr::group_by(jobtitle_ngrams) %>% 
+  dplyr::summarise(jobtitle_weight_mean = mean(jobtitle_weight)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::pull(jobtitle_weight_mean) %>%
+  sort(decreasing = T) %>% 
+  plot(xlim=c(0,1000)) %>% 
+  abline(h=seq(0,1,by=0.05), col='red') %>% 
+  abline(v=c(50,100,200), col='blue') 
+
+d %>% 
+  # filter most important jobs
+  dplyr::filter(jobtitle_weight > 0.15) %>%
+  # dplyr::filter(stringr::str_detect(jobtitle_ngrams, "data|project")) %>% 
+  # remove skills that are jobtitles or viceversa
+  dplyr::filter(jobtitle_ngrams != skills) %>%
+  # dplyr::pull(jobtitle_ngrams) %>% unique %>% length
+  # filter top n skills per jobtitle
+  dplyr::group_by(jobtitle_ngrams) %>%
+  dplyr::slice_max(order_by = count_pair, n=5, with_ties=T) %>% 
+  dplyr::ungroup() %>% 
+  # dplyr::pull(skills) %>% unique %>% length
+  # remove count pairs with less than two repetitions
+  dplyr::filter(count_pair > 2) %>%
+  # prepare graph data
+  dplyr::relocate(jobtitle_ngrams, skills) %>% 
+  tidygraph::as_tbl_graph(from=jobtitle) %>% 
+  tidygraph::activate(nodes) %>% 
+  tidygraph::mutate(
+    source = tidygraph::node_is_source(),
+    sink = tidygraph::node_is_sink(),
+    category = factor(ifelse(!source & !sink, 3, ifelse(source, 1, 2)))
+  ) %>% 
+  # tidygraph::activate(edges) %>% 
+  ggraph::ggraph(layout = "fr") +
+  ggraph::geom_edge_bend(ggplot2::aes(edge_width=count_pair),
+                         strength = 0.5, show.legend = F, edge_color="#000000",
+                         start_cap = ggraph::rectangle(width = 0.6, height = 0.2, 'inches'),
+                         end_cap = ggraph::rectangle(width = 0.6, height = 0.2, 'inches')) +
+  ggraph::geom_node_label(ggplot2::aes(label = stringr::str_wrap(name, width=10), color=category), 
+                          family="Roboto Medium", lineheight = .7, 
+                          size=3, label.padding = grid::unit(0.1, "lines"),
+                          repel = F, show.legend = F) +
+  ggraph::scale_edge_width_continuous(range=c(0.1,2))+
+  # ggplot2::scale_size_continuous(range = c(3, 5))+
+  # ggplot2::scale_alpha_continuous(range = c(0.5, 2.0))+
+  ggplot2::scale_color_manual(values=c("#8338ec", "#ff006e", "#0B1AFF"))+
+  ggplot2::theme_void()
+
+
+# NODES AND EDGES ---------------------------------------------------------
+
+graph_data <- d %>% 
+  # filter most important jobs
+  dplyr::filter(jobtitle_weight > 0.25) %>%
+  # remove skills that are jobtitles or viceversa
+  # dplyr::filter(jobtitle_ngrams != skills) %>%
+  # dplyr::pull(jobtitle_ngrams) %>% unique %>% length
+  # filter top n skills per jobtitle
+  dplyr::group_by(jobtitle_ngrams) %>%
+  dplyr::slice_max(order_by = count_pair, n=10, with_ties=F) %>% 
+  dplyr::ungroup() %>% 
+  # dplyr::pull(skills) %>% unique %>% length
+  # remove count pairs with less than two repetitions
+  # dplyr::filter(count_pair > 2) %>%
+  # prepare graph data
+  dplyr::relocate(jobtitle_ngrams, skills)
+
+nodes_data <- graph_data %>% 
+  dplyr::select(jobtitle_ngrams, skills) %>%
   tidyr::gather(key, value) %>% 
   dplyr::distinct() %>% 
-  dplyr::mutate(id = dplyr::row_number())
+  dplyr::mutate(node_id = dplyr::row_number()) %>% 
+  dplyr::select(node_id, label=value, type=key)
 
-edges <- d %>% 
-  dplyr::count(jobtitle_ngrams, skills, name="count_pair", sort=F) %>% 
-  dplyr::filter(count_pair > 1) %>% 
-  # dplyr::slice(1:1000) %>%
+
+edges_data <- graph_data %>% 
+  dplyr::mutate(edge_id = dplyr::row_number()) %>% 
   dplyr::rowwise() %>%
   dplyr::mutate(
-    jobtitle_id = nodes %>% dplyr::filter(key=="jobtitle_ngrams", jobtitle_ngrams == value) %>% dplyr::pull(id),
-    skills_id = nodes %>% dplyr::filter(key=="skills", skills == value) %>% dplyr::pull(id)
-  )
+    jobtitle_id = nodes_data %>% dplyr::filter(type=="jobtitle_ngrams", jobtitle_ngrams == label) %>% dplyr::pull(node_id),
+    skills_id = nodes_data %>% dplyr::filter(type=="skills", skills == label) %>% dplyr::pull(node_id)
+  ) %>% 
+  dplyr::select(edge_id, from=jobtitle_id, to=skills_id, weight=count_pair)
 
-nodes <- nodes %>% 
-  dplyr::filter(id %in% c(edges$jobtitle_id, edges$skills_id))
 
-rgexf::write.gexf(nodes = nodes %>% dplyr::select(id, lable=value), 
-                  edges = edges %>% dplyr::select(source=jobtitle_id, target=skills_id),
-                  nodesAtt = nodes %>% dplyr::select(type=key), 
-                  edgesAtt = edges %>% dplyr::select(weight=count_pair),
-                  output = "lesmis2.gexf")
+
+# GEPHI -------------------------------------------------------------------
+
+nodes <- nodes_data %>%
+  dplyr::select(node_id, label)
+
+nodesAtt <- nodes_data %>%
+  dplyr::select(node_id, type)
+
+edges <- edges_data %>%
+  dplyr::select(from, to)
+
+edgesAtt <- edges_data %>%
+  dplyr::select(weight)
+
+rgexf::write.gexf(nodes, edges, nodesAtt=nodesAtt, edgesAtt=edgesAtt, output = "lesmis2.gexf")
+
+
+ 
+# D3 NETWORK --------------------------------------------------------------
+
+networkD3::simpleNetwork(graph_data, zoom=T)
+networkD3::forceNetwork(
+  Links = edges_data %>% dplyr::mutate(from=from-1, to=to-1), 
+  Nodes = nodes_data %>% dplyr::mutate(node_id=node_id-1), 
+  Source = 'from', Target = 'to', NodeID = "label", Group = "type", Value = "weight", 
+  bounded=F, zoom = T,  
+  colourScale = networkD3::JS("d3.scaleOrdinal(d3.schemeCategory10);"),
+  fontSize = 14, linkColour="#A6A6A6", opacity = 1, opacityNoHover = 0,
+)
+networkD3::sankeyNetwork(
+  Links = edges_data %>% dplyr::mutate(from=from-1, to=to-1), 
+  Nodes = nodes_data %>% dplyr::mutate(node_id=node_id-1), 
+  Source = 'from', Target = 'to', NodeID = "label", Value = "weight",
+  NodeGroup = "type", sinksRight = F
+)
+
+
+# VISNETWORK --------------------------------------------------------------
+
+visNetwork::visNetwork(
+  nodes = nodes_data %>% 
+    dplyr::mutate(color = ifelse(type=="jobtitle_ngrams", "#DDB4E0", "#ffd6a5"),
+                  label = stringr::str_wrap(label, width=10)) %>% 
+    dplyr::rename(id=node_id, group=type),
+  edges = edges_data %>% dplyr::rename(value=weight)
+) %>% 
+  visNetwork::visNodes(
+    shape = "box", 
+    borderWidth = 0,
+    font = list(size=30, color="black", face="Roboto Condensed")
+  ) %>%
+  visNetwork::visEdges(
+    smooth = F, 
+    hoverWidth = 4, 
+    selectionWidth = 4,
+    color = '#A6A6A6'
+    ) %>% 
+  visNetwork::visIgraphLayout(type = "square") %>%
+  visNetwork::visPhysics(
+    stabilization = T, minVelocity =  0.75, timestep =  0.48, solver = "forceAtlas2Based",
+    forceAtlas2Based = list(gravitationalConstant = -167, 
+                            centralGravity = 0.005,
+                            springLength = 120,
+                            damping = 0.85,
+                            avoidOverlap = 1)
+  ) %>% 
+  visNetwork::visInteraction(
+    hideEdgesOnDrag = T,
+    hover = T
+  ) %>% 
+  visNetwork::visOptions(
+    highlightNearest = list(enabled = T, degree = 2, hover = T, labelOnly=T, hideColor="rgba(200,200,200,0.25)"),
+    ) %>% 
+  visNetwork::visConfigure(enabled = F)
 
