@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title></title>
+  <meta name="author" content="">
+  <meta name="description" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+
+  <p>Hello, world!</p>
+
+  <script>
+console.log("HEY")
+
+data = "This was an absolutely terrible movie. Don't be lured in by Christopher Walken or Michael Ironside. Both are great actors, but this must simply be their worst role in history. Even their great acting could not redeem this movie's ridiculous storyline. This movie is an early nineties US propaganda piece. The most pathetic scenes were those when the Columbian rebels were making their cases for revolutions. Maria Conchita Alonso appeared phony, and her pseudo-love affair with Walken was nothing but a pathetic emotional plug in a movie that was devoid of any real meaning. I am disappointed that there are movies like this, ruining actor's like Christopher Walken's good name. I could barely sit through it."
+var request = new XMLHttpRequest();
+request.open('POST', 'http://0.0.0.0:8080', true);
+request.setRequestHeader('Content-Type', 'application/raw; charset=UTF-8');
+/*request.send(data);*/
+
+/*request.open('GET', 'http://0.0.0.0:8080', true);*/
+
+request.onload = function() {
+if (this.status >= 200 && this.status < 400) {
+// Success!
+var resp = this.response;
+console.log(resp)
+var data = JSON.parse(this.response);
+} else {
+// We reached our target server, but it returned an error
+console.log("returned error")
+}
+};
+
+request.onerror = function() {
+// There was a connection error of some sort
+console.log("connection error")
+};
+
+request.send(data);
+
+
+  </script>
+</body>
+
+</html>
